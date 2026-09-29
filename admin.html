@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Guru</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="index.html">← Kembali</a>
+    <h1>🔐 Guru / Admin</h1>
+
+    <!-- LOGIN -->
+    <div id="loginBox" class="card">
+      <p class="sub">Masukkan PIN untuk melanjutkan</p>
+      <input id="pin" type="password" inputmode="numeric" placeholder="PIN" onkeydown="if(event.key==='Enter')login()">
+      <button class="btn" onclick="login()">Masuk</button>
+      <p id="loginErr" style="color:#ff8a8a;text-align:center"></p>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dash" style="display:none">
+      <p class="sub" id="info"></p>
+
+      <div class="card">
+        <div class="grid" id="stats"></div>
+      </div>
+
+      <div class="card">
+        <canvas id="chart" height="220"></canvas>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:10px">Catat Izin / Sakit</h3>
+        <select id="selSiswa"></select>
+        <select id="selKet">
+          <option value="Izin">Izin</option>
+          <option value="Sakit">Sakit</option>
+        </select>
+        <button class="btn" onclick="catat()">Simpan</button>
+        <p id="msg" style="text-align:center"></p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:10px">Absensi Terbaru Hari Ini</h3>
+        <table>
+          <thead><tr><th>Nama</th><th>No</th><th>Jam</th><th>Ket</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script>
+    let PIN = "", chart;
+
+    async function login() {
+      PIN = document.getElementById("pin").value.trim();
+      document.getElementById("loginErr").textContent = "Memeriksa...";
+      try {
+        const ok = await muat();
+        if (!ok) document.getElementById("loginErr").textContent = "PIN salah";
+      } catch (e) {
+        document.getElementById("loginErr").textContent = "Gagal terhubung ke server";
+      }
+    }
+
+    async function muat() {
+      const r = await api({ action: "dashboard", pin: PIN });
+      if (!r.ok) return false;
+      document.getElementById("loginBox").style.display = "none";
+      document.getElementById("dash").style.display = "block";
+      render(r);
+      return true;
+    }
+
+    function render(r) {
+      const j = r.jumlah, p = r.persen;
+      document.getElementById("info").textContent =
+        "Total siswa: " + r.total + " • " + new Date().toLocaleDateString("id-ID", { dateStyle: "full" });
+
+      const items = [
+        ["Hadir", "hadir"], ["Terlambat", "terlambat"],
+        ["Izin", "izin"], ["Sakit", "sakit"], ["Alfa", "alfa"]
+      ];
+      document.getElementById("stats").innerHTML = items.map(([n, k]) =>
+        `<div class="stat"><b>${p[k]}%</b><small>${n} (${j[k]})</small></div>`).join("");
+
+      const labels = items.map(i => i[0]);
+      const values = items.map(i => j[i[1]]);
+      const warna = ["#22c55e", "#f59e0b", "#3b82f6", "#a855f7", "#ef4444"];
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById("chart"), {
+        type: "bar",
+        data: { labels, datasets: [{ label: "Jumlah siswa", data: values, backgroundColor: warna, borderRadius: 8 }] },
+        options: {
+          plugins: { legend: { labels: { color: "#fff" } } },
+          scales: {
+            x: { ticks: { color: "#fff" }, grid: { display: false } },
+            y: { beginAtZero: true, ticks: { color: "#fff", precision: 0 }, grid: { color: "rgba(255,255,255,.15)" } }
+          }
+        }
+      });
+
+      const sel = document.getElementById("selSiswa");
+      if (!sel.options.length) {
+        sel.innerHTML = r.siswa.map(s => `<option value="${s.no}">${s.no}. ${s.nama}</option>`).join("");
+      }
+
+      document.getElementById("tbody").innerHTML = r.terbaru.map(d =>
+        `<tr><td>${d.nama}</td><td>${d.no}</td><td>${d.waktu}</td><td>${d.ket}</td></tr>`).join("");
+    }
+
+    async function catat() {
+      const m = document.getElementById("msg");
+      m.textContent = "Menyimpan...";
+      const r = await api({
+        action: "manual", pin: PIN,
+        kode: document.getElementById("selSiswa").value,
+        ket: document.getElementById("selKet").value
+      });
+      m.textContent = r.pesan;
+      if (r.ok) muat();
+    }
+
+    // refresh otomatis tiap 30 detik setelah login
+    setInterval(() => { if (PIN) muat(); }, 30000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Absensi Siswa</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="index.html">← Kembali</a>
+    <h1>🎓 Absensi Siswa</h1>
+    <p class="sub">Arahkan kamera ke QR Code kamu</p>
+
+    <div class="card">
+      <div id="reader"></div>
+      <button class="btn ghost" style="margin-top:12px" onclick="gantiKamera()">🔄 Ganti Kamera (Depan/Belakang)</button>
+    </div>
+
+    <div id="hasil" class="hasil"></div>
+  </div>
+
+  <script src="config.js"></script>
+  <script>
+    let scanner, facing = "environment", sibuk = false;
+
+    async function mulai() {
+      scanner = new Html5Qrcode("reader");
+      try {
+        await scanner.start({ facingMode: facing }, { fps: 10, qrbox: 240 }, onScan);
+      } catch (e) {
+        tampil("err", "Kamera tidak bisa dibuka", "Izinkan akses kamera di browser.");
+      }
+    }
+
+    async function gantiKamera() {
+      try { await scanner.stop(); } catch (e) {}
+      facing = facing === "environment" ? "user" : "environment";
+      mulai();
+    }
+
+    async function onScan(teks) {
+      if (sibuk) return;
+      sibuk = true;
+      tampil("ok", "⏳ Memproses...", "");
+      try {
+        const r = await api({ action: "scan", kode: teks });
+        if (!r.ok) {
+          tampil("err", "❌ " + r.pesan, r.nama || "");
+        } else if (r.ket === "TERLAMBAT!") {
+          tampil("late", "⚠️ TERLAMBAT!", r.nama + " • No " + r.no + " • " + r.waktu);
+        } else {
+          tampil("ok", "✅ " + r.ket, r.nama + " • No " + r.no + " • " + r.waktu);
+        }
+      } catch (e) {
+        tampil("err", "❌ Gagal terhubung ke server", "Cek internet / URL API");
+      }
+      setTimeout(() => { sibuk = false; }, 3000);
+    }
+
+    function tampil(kelas, judul, detail) {
+      const el = document.getElementById("hasil");
+      el.className = "hasil " + kelas;
+      el.style.display = "block";
+      el.innerHTML = "<h2>" + judul + "</h2><div>" + detail + "</div>";
+    }
+
+    mulai();
+  </script>
+</body>
+</html>
